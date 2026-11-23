@@ -51,11 +51,11 @@ os-lab-ipc/
 ├── README.md
 ├── include/
 │   ├── process.hpp             # Интерфейс класса Process
-│   └── string_utils.cpp
+│   └── string_utils.cpp        # Бизнес-логика
 └── src/
     ├── child.cpp               # Дочерний процесс
     ├── parent.cpp              # Родительский процесс
-    ├── string_utils.cpp        # Функции обработки строк
+    ├── string_utils.cpp
     └── posix/
     │   └── process_posix.cpp   # POSIX-реализация под Linux
 ```
