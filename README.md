@@ -37,18 +37,8 @@ cmake --build build
 
 #### Основная программа
 
-- **Linux / macOS:**
-
 ```Bash
 ./build/parent
-```
-    
-- **Windows (PowerShell / cmd):**
-
-```PowerShell
-.\build\parent.exe
-# Или для конфигурации Visual Studio:
-.\build\Debug\parent.exe
 ```
 
 ---
