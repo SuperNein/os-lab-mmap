@@ -52,6 +52,9 @@ os-lab-mmap/
 ├── include/
 │   ├── process.hpp             # Интерфейс класса Process
 │   └── string_utils.cpp        # Бизнес-логика
+├── report/                     # Отчет
+│   ├── report.pdf
+│   └── report.tex
 └── src/
     ├── child.cpp               # Дочерний процесс
     ├── parent.cpp              # Родительский процесс
