@@ -60,7 +60,7 @@ os-lab-mmap/
     ├── parent.cpp              # Родительский процесс
     ├── string_utils.cpp
     └── posix/
-    │   └── process_posix.cpp   # POSIX-реализация под Linux
+        └── process_posix.cpp   # POSIX-реализация под Linux
 ```
 
 ---
