@@ -9,6 +9,7 @@
 
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -20,6 +21,16 @@ bool wait_sem(sem_t* sem) {
             continue;
         }
         perror("sem_wait");
+        return false;
+    }
+    return true;
+}
+
+bool try_wait_sem(sem_t* sem) {
+    while (sem_trywait(sem) == -1) {
+        if (errno == EINTR) {
+            continue;
+        }
         return false;
     }
     return true;
@@ -53,18 +64,29 @@ bool wait_ack(sem_t* ack, pid_t peer_pid) {
         }
 
         if (errno == ETIMEDOUT) {
-            int status = 0;
-            pid_t rc = waitpid(peer_pid, &status, WNOHANG);
-            if (rc == peer_pid) {
-                std::cerr << "Child process (PID: " << peer_pid
-                          << ") exited unexpectedly while waiting for ack\n";
-                return false;
+            siginfo_t info {};
+            int rc = waitid(
+                P_PID,
+                static_cast<id_t>(peer_pid),
+                &info,
+                WEXITED | WNOHANG | WNOWAIT
+            );
+            if (rc == 0) {
+                if (info.si_pid == peer_pid) {
+                    if (try_wait_sem(ack)) {
+                        return true;
+                    }
+                    std::cerr << "Child process (PID: " << peer_pid
+                              << ") exited unexpectedly while waiting for ack\n";
+                    return false;
+                }
+                continue;
             }
-            if (rc == -1) {
-                perror("waitpid");
-                return false;
+            if (errno == EINTR) {
+                continue;
             }
-            continue;
+            perror("waitid");
+            return false;
         }
 
         perror("sem_timedwait");
@@ -194,6 +216,24 @@ bool ShmChannel::open(const std::string& name) {
         return false;
     }
 
+    struct stat st {};
+    if (fstat(fd, &st) == -1) {
+        perror("fstat");
+        if (::close(fd) == -1) {
+            perror("close");
+        }
+        return false;
+    }
+
+    if (st.st_size < static_cast<off_t>(sizeof(SharedRegion))) {
+        std::cerr << "Shared memory object is too small: " << st.st_size
+                  << " bytes (expected at least " << sizeof(SharedRegion) << ")\n";
+        if (::close(fd) == -1) {
+            perror("close");
+        }
+        return false;
+    }
+
     void* addr = mmap(
         nullptr,
         sizeof(SharedRegion),
@@ -310,6 +350,14 @@ bool ShmChannel::receive_line(std::string& out_line, bool& is_eof) {
             return false;
         }
 
+        if (flag != PacketFlag::DATA_CHUNK && flag != PacketFlag::LINE_END) {
+            std::cerr << "Unknown packet flag in shared memory\n";
+            if (sem_post(&region_->ack) == -1) {
+                perror("sem_post ack");
+            }
+            return false;
+        }
+
         if (len > 0) {
             out_line.append(region_->data, len);
         }
@@ -321,11 +369,6 @@ bool ShmChannel::receive_line(std::string& out_line, bool& is_eof) {
 
         if (flag == PacketFlag::LINE_END) {
             return true;
-        }
-
-        if (flag != PacketFlag::DATA_CHUNK) {
-            std::cerr << "Unknown packet flag in shared memory\n";
-            return false;
         }
     }
 }

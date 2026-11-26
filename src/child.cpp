@@ -19,10 +19,19 @@ int child(const std::string& shm_name) {
 
     while (channel.receive_line(line, is_eof)) {
         reverse_string(line);
-        std::cout << line << '\n';
+        if (!(std::cout << line << '\n')) {
+            std::cerr << "[Child] Failed to write to output file\n";
+            channel.close();
+            return 1;
+        }
     }
 
     channel.close();
+
+    if (!std::cout.flush()) {
+        std::cerr << "[Child] Failed to flush output file\n";
+        return 1;
+    }
 
     if (!is_eof) {
         return 1;
@@ -32,7 +41,7 @@ int child(const std::string& shm_name) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 2) {
+    if (argc != 2) {
         std::cerr << "Usage: child <shm_name>\n";
         return 1;
     }

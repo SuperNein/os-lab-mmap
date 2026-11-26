@@ -41,6 +41,9 @@ Process::Process(
         throw std::runtime_error("Failed to open output file: " + output_file_path);
     }
 
+    std::cout.flush();
+    std::cerr.flush();
+
     pid_t fork_rc = fork();
 
     if (fork_rc == -1) {
@@ -51,14 +54,16 @@ Process::Process(
         channel_.close();
         throw std::runtime_error("Failed to fork");
     } else if (fork_rc == 0) {
-        if (dup2(file_fd, STDOUT_FILENO) == -1) {
-            perror("dup2 stdout");
-            _exit(EXIT_FAILURE);
-        }
+        if (file_fd != STDOUT_FILENO) {
+            if (dup2(file_fd, STDOUT_FILENO) == -1) {
+                perror("dup2 stdout");
+                _exit(EXIT_FAILURE);
+            }
 
-        if (close(file_fd) == -1) {
-            perror("close file_fd");
-            _exit(EXIT_FAILURE);
+            if (close(file_fd) == -1) {
+                perror("close file_fd");
+                _exit(EXIT_FAILURE);
+            }
         }
 
         execl(
@@ -84,31 +89,46 @@ void Process::send_line(const std::string& line) {
     }
 
     if (!channel_.send_line(line, pid_)) {
+        is_closed_ = true;
         throw std::runtime_error("Failed to send line via shared memory");
     }
 }
 
 void Process::close_input() {
     if (!is_closed_ && channel_.is_open()) {
+        is_closed_ = true;
         if (!channel_.send_eof(pid_)) {
             std::cerr << "Warning: failed to send EOF to child (PID: " << pid_ << ")\n";
         }
-        is_closed_ = true;
     }
 }
 
 void Process::wait() {
     if (pid_ > 0) {
+        if (!is_closed_) {
+            close_input();
+        }
+
         int status = 0;
-        while (waitpid(pid_, &status, 0) == -1) {
+        pid_t waited_pid = -1;
+        while ((waited_pid = waitpid(pid_, &status, 0)) == -1) {
             if (errno == EINTR) {
                 continue;
             }
-            if (errno != ECHILD) {
-                perror("waitpid");
-            }
+            perror("waitpid");
             break;
         }
+
+        if (waited_pid == pid_) {
+            if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
+                std::cerr << "Child process (PID: " << pid_
+                          << ") exited with non-zero status: " << WEXITSTATUS(status) << '\n';
+            } else if (WIFSIGNALED(status)) {
+                std::cerr << "Child process (PID: " << pid_
+                          << ") terminated by signal: " << WTERMSIG(status) << '\n';
+            }
+        }
+
         pid_ = -1;
     }
 
@@ -121,5 +141,5 @@ Process::~Process() {
 }
 
 unsigned long Process::get_pid() const {
-    return static_cast<unsigned long>(pid_);
+    return (pid_ > 0) ? static_cast<unsigned long>(pid_) : 0UL;
 }
