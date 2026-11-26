@@ -46,7 +46,7 @@ cmake --build build
 ## Структура проекта
 
 ```text
-os-lab-ipc/
+os-lab-mmap/
 ├── CMakeLists.txt
 ├── README.md
 ├── include/

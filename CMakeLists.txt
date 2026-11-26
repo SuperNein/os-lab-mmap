@@ -11,31 +11,31 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 add_library(compiler_warnings INTERFACE)
-if(MSVC)
-    target_compile_options(compiler_warnings INTERFACE /W4 /WX)
-else()
-    target_compile_options(compiler_warnings INTERFACE -Wall -Wextra -Wpedantic -Werror)
-endif()
+target_compile_options(compiler_warnings INTERFACE -Wall -Wextra -Wpedantic -Werror)
+
+find_package(Threads REQUIRED)
 
 # child
-add_executable(child 
-    src/child.cpp 
+add_executable(child
+    src/child.cpp
+    src/shm_channel.cpp
     src/string_utils.cpp
 )
 
 target_include_directories(child PRIVATE include)
-target_link_libraries(child PRIVATE compiler_warnings)
+target_link_libraries(child PRIVATE compiler_warnings Threads::Threads rt)
 
-# parent 
-set(PARENT_SOURCES 
+# parent
+set(PARENT_SOURCES
     src/parent.cpp
-    src/posix/process_posix.cpp
+    src/process.cpp
+    src/shm_channel.cpp
 )
 
 add_executable(parent ${PARENT_SOURCES})
 target_include_directories(parent PRIVATE include)
-target_link_libraries(parent PRIVATE compiler_warnings)
+target_link_libraries(parent PRIVATE compiler_warnings Threads::Threads rt)
 
-target_compile_definitions(parent PRIVATE 
+target_compile_definitions(parent PRIVATE
     CHILD_PATH="$<TARGET_FILE:child>"
 )
